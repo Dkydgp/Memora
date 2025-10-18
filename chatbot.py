@@ -18,7 +18,11 @@ from dotenv import load_dotenv
 import chainlit as cl
 from openai import OpenAI
 from self_train import run_self_training, recall_from_knowledge
+from tinydb import TinyDB, Query
 
+# Initialize database (TinyDB stores data as a JSON file)
+db = TinyDB('chat_memory_db.json')
+Chat = Query()
 
 # ------------------------------
 # Environment Setup
