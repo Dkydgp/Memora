@@ -2,3 +2,4 @@ chainlit
 openai
 python-dotenv
 tinydb
+requests
