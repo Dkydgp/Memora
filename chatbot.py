@@ -8,27 +8,30 @@ Features:
 ✅ Stores and recalls past chats (persistent TinyDB memory)
 ✅ Learns automatically using self_train.py
 ✅ Context-aware responses using last 5 messages
+✅ Sends user–bot chats to n8n via webhook
 ✅ Error-safe and PEP 8 compliant
 """
 
 import os
 import traceback
+import requests  # ✅ Added for n8n webhook
 from dotenv import load_dotenv
 import chainlit as cl
 from openai import OpenAI
 from self_train import run_self_training, recall_from_knowledge
 from tinydb import TinyDB, Query
 
+
 # ------------------------------
 # Database (TinyDB for persistent memory)
 # ------------------------------
-db = TinyDB('chat_memory_db.json')
+db = TinyDB("chat_memory_db.json")
 Chat = Query()
 
 
 def save_chat_to_db(user_msg, bot_msg):
     """Save a user–assistant chat pair to TinyDB."""
-    db.insert({'user': user_msg, 'assistant': bot_msg})
+    db.insert({"user": user_msg, "assistant": bot_msg})
 
 
 def load_chats_from_db(limit=10):
@@ -46,10 +49,33 @@ API_KEY = os.getenv("OPENAI_API_KEY")
 if not API_KEY:
     raise ValueError("❌ OPENAI_API_KEY not found in .env file!")
 
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")  # ✅ Added for n8n
+
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=API_KEY,
 )
+
+
+# ------------------------------
+# n8n Webhook Function
+# ------------------------------
+def send_to_n8n(data: dict):
+    """Send chatbot data (user & bot messages) to n8n webhook."""
+    if not N8N_WEBHOOK_URL:
+        print("⚠️ N8N_WEBHOOK_URL not found in environment.")
+        return
+
+    try:
+        response = requests.post(N8N_WEBHOOK_URL, json=data, timeout=5)
+        if response.status_code == 200:
+            print("✅ Data sent to n8n successfully.")
+        else:
+            print(
+                f"⚠️ n8n webhook returned {response.status_code}: {response.text}"
+            )
+    except Exception as e:
+        print(f"❌ Error sending to n8n: {e}")
 
 
 # ------------------------------
@@ -58,7 +84,10 @@ client = OpenAI(
 @cl.on_chat_start
 async def start_chat():
     await cl.Message(
-        content="👋 Hi there! I'm your personal AI assistant. I can remember, learn, and chat naturally.\nHow can I help you today?"
+        content=(
+            "👋 Hi there! I'm your personal AI assistant. "
+            "I can remember, learn, and chat naturally.\nHow can I help you today?"
+        )
     ).send()
 
 
@@ -78,7 +107,10 @@ async def handle_message(message: cl.Message):
 
     # Prepare conversation context
     context_history = "\n".join(
-        [f"User: {c.get('user', '')}\nAssistant: {c.get('assistant', '')}" for c in memory]
+        [
+            f"User: {c.get('user', '')}\nAssistant: {c.get('assistant', '')}"
+            for c in memory
+        ]
     )
 
     # Build full context-aware prompt
@@ -112,6 +144,9 @@ async def handle_message(message: cl.Message):
 
         # Save new chat pair to TinyDB
         save_chat_to_db(user_msg, bot_msg)
+
+        # ✅ Send both messages to n8n webhook
+        send_to_n8n({"user_message": user_msg, "bot_reply": bot_msg})
 
         # Automatically trigger self-training every 5 chats
         all_chats = db.all()
