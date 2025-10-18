@@ -1,18 +1,17 @@
 """
 chatbot.py
 -----------
-Chainlit + OpenRouter Chatbot with Self-Learning and Persistent Memory
+Chainlit + OpenRouter Chatbot with Self-Learning and Persistent Memory (TinyDB)
 -------------------------------------------------------------
 Features:
 ✅ Uses OpenRouter API
-✅ Stores and recalls past chats (persistent memory)
+✅ Stores and recalls past chats (persistent TinyDB memory)
 ✅ Learns automatically using self_train.py
 ✅ Context-aware responses using last 5 messages
 ✅ Error-safe and PEP 8 compliant
 """
 
 import os
-import json
 import traceback
 from dotenv import load_dotenv
 import chainlit as cl
@@ -20,9 +19,23 @@ from openai import OpenAI
 from self_train import run_self_training, recall_from_knowledge
 from tinydb import TinyDB, Query
 
-# Initialize database (TinyDB stores data as a JSON file)
+# ------------------------------
+# Database (TinyDB for persistent memory)
+# ------------------------------
 db = TinyDB('chat_memory_db.json')
 Chat = Query()
+
+
+def save_chat_to_db(user_msg, bot_msg):
+    """Save a user–assistant chat pair to TinyDB."""
+    db.insert({'user': user_msg, 'assistant': bot_msg})
+
+
+def load_chats_from_db(limit=10):
+    """Load recent chat messages from TinyDB."""
+    chats = db.all()
+    return chats[-limit:] if chats else []
+
 
 # ------------------------------
 # Environment Setup
@@ -37,31 +50,6 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=API_KEY,
 )
-
-CHAT_MEMORY_FILE = "chat_memory.json"
-
-
-# ------------------------------
-# Utility Functions
-# ------------------------------
-def load_chat_memory():
-    """Load previous chat history from JSON file."""
-    if not os.path.exists(CHAT_MEMORY_FILE):
-        return []
-    try:
-        with open(CHAT_MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        print("⚠️ Error reading chat memory. Resetting file.")
-        return []
-
-
-def save_chat_to_memory(user_msg, bot_msg):
-    """Save a user–assistant chat pair to chat_memory.json."""
-    data = load_chat_memory()
-    data.append({"user": user_msg, "assistant": bot_msg})
-    with open(CHAT_MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=4, ensure_ascii=False)
 
 
 # ------------------------------
@@ -81,17 +69,16 @@ async def handle_message(message: cl.Message):
         await cl.Message(content="⚠️ Please type something to continue.").send()
         return
 
-    # Load full memory for context
-    memory = load_chat_memory()
+    # Load memory from TinyDB
+    memory = load_chats_from_db(limit=5)
 
-    # Recall related knowledge from long-term memory
+    # Recall related knowledge from self-learning module
     related_info = recall_from_knowledge(user_msg)
     related_text = "\n".join(related_info) if related_info else "None"
 
-    # Keep last 5 messages as conversation context
-    last_chats = memory[-5:] if len(memory) >= 5 else memory
+    # Prepare conversation context
     context_history = "\n".join(
-        [f"User: {c['user']}\nAssistant: {c['assistant']}" for c in last_chats]
+        [f"User: {c.get('user', '')}\nAssistant: {c.get('assistant', '')}" for c in memory]
     )
 
     # Build full context-aware prompt
@@ -120,14 +107,15 @@ async def handle_message(message: cl.Message):
 
         bot_msg = response.choices[0].message.content.strip()
 
-        # Send reply
+        # Send reply to user
         await cl.Message(content=bot_msg).send()
 
-        # Save new chat pair to memory
-        save_chat_to_memory(user_msg, bot_msg)
+        # Save new chat pair to TinyDB
+        save_chat_to_db(user_msg, bot_msg)
 
-        # Automatically train every 5 chats
-        if len(memory) % 5 == 0:
+        # Automatically trigger self-training every 5 chats
+        all_chats = db.all()
+        if len(all_chats) % 5 == 0:
             run_self_training()
 
     except Exception as e:
@@ -142,6 +130,6 @@ async def handle_message(message: cl.Message):
 # Run Command
 # ------------------------------
 # Launch this chatbot using:
-#   chainlit run chatbot.py -w
+#   chainlit run chatbot.py --host 0.0.0.0 --port 10000
 #
-# Your chatbot will open in the browser automatically.
+# (For Render deployment)
