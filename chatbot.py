@@ -9,12 +9,13 @@ Features:
 ✅ Learns automatically using self_train.py
 ✅ Context-aware responses using last 5 messages
 ✅ Sends user–bot chats to n8n via webhook
+✅ Can receive automated replies/actions from n8n (optional)
 ✅ Error-safe and PEP 8 compliant
 """
 
 import os
 import traceback
-import requests  # ✅ Added for n8n webhook
+import requests
 from dotenv import load_dotenv
 import chainlit as cl
 from openai import OpenAI
@@ -49,7 +50,8 @@ API_KEY = os.getenv("OPENAI_API_KEY")
 if not API_KEY:
     raise ValueError("❌ OPENAI_API_KEY not found in .env file!")
 
-N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")  # ✅ Added for n8n
+N8N_WEBHOOK_URL = os.getenv("N8N_WEBHOOK_URL")  # ✅ For sending to n8n
+N8N_RESPONSE_URL = os.getenv("N8N_RESPONSE_URL")  # ✅ Optional for receiving from n8n
 
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
@@ -58,24 +60,49 @@ client = OpenAI(
 
 
 # ------------------------------
-# n8n Webhook Function
+# n8n Integration
 # ------------------------------
 def send_to_n8n(data: dict):
-    """Send chatbot data (user & bot messages) to n8n webhook."""
+    """
+    Send chatbot conversation data (user & bot messages) to n8n webhook.
+    """
     if not N8N_WEBHOOK_URL:
         print("⚠️ N8N_WEBHOOK_URL not found in environment.")
         return
 
     try:
-        response = requests.post(N8N_WEBHOOK_URL, json=data, timeout=5)
+        response = requests.post(N8N_WEBHOOK_URL, json=data, timeout=10)
         if response.status_code == 200:
             print("✅ Data sent to n8n successfully.")
+            if response.text.strip():
+                print("📨 n8n response:", response.text)
         else:
             print(
                 f"⚠️ n8n webhook returned {response.status_code}: {response.text}"
             )
     except Exception as e:
         print(f"❌ Error sending to n8n: {e}")
+
+
+def receive_from_n8n():
+    """
+    (Optional) Pull updates or instructions from n8n if needed.
+    Example: n8n sends reminders, emails, or task updates to chatbot.
+    """
+    if not N8N_RESPONSE_URL:
+        return None
+
+    try:
+        response = requests.get(N8N_RESPONSE_URL, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            print("📥 Received data from n8n:", data)
+            return data
+        else:
+            print(f"⚠️ Failed to fetch from n8n ({response.status_code})")
+    except Exception as e:
+        print(f"❌ Error receiving from n8n: {e}")
+    return None
 
 
 # ------------------------------
@@ -85,8 +112,9 @@ def send_to_n8n(data: dict):
 async def start_chat():
     await cl.Message(
         content=(
-            "👋 Hi there! I'm your personal AI assistant. "
-            "I can remember, learn, and chat naturally.\nHow can I help you today?"
+            "👋 Hi there! I'm your personal AI assistant.\n"
+            "I can remember, learn, and even talk to your n8n automations.\n"
+            "How can I help you today?"
         )
     ).send()
 
@@ -130,7 +158,7 @@ async def handle_message(message: cl.Message):
                     "role": "system",
                     "content": (
                         "You are a helpful, context-aware personal assistant chatbot "
-                        "that remembers previous chats and uses knowledge base effectively."
+                        "that remembers previous chats and uses the knowledge base effectively."
                     ),
                 },
                 {"role": "user", "content": full_prompt},
@@ -147,6 +175,15 @@ async def handle_message(message: cl.Message):
 
         # ✅ Send both messages to n8n webhook
         send_to_n8n({"user_message": user_msg, "bot_reply": bot_msg})
+
+        # 🔁 Optional: Check if n8n has a response or task update
+        n8n_data = receive_from_n8n()
+        if n8n_data:
+            note = n8n_data.get("note") or n8n_data.get("message")
+            if note:
+                await cl.Message(
+                    content=f"📬 n8n says: {note}"
+                ).send()
 
         # Automatically trigger self-training every 5 chats
         all_chats = db.all()
