@@ -6,6 +6,8 @@ Memora is an **AI-powered chatbot** built with **Python**, **Chainlit**, and the
 Unlike ordinary chatbots, Memora can **remember your past chats** and **recall context** across sessions — offering a truly personalized conversation experience.
 
 ---
+![Pylint Score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Dkydgp/Memora/main/pylint_score.json?cacheBust=1)
+
 
 ## ✨ Features
 
