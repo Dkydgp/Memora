@@ -114,5 +114,9 @@ Based on: Chainlit + OpenRouter API + Python
 ### Code quality (Pylint)
 ![Pylint Score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Dkydgp/Memora/main/pylint_score.json)
 
+### 🧠 Code Quality (Pylint)
+
+![Pylint Score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Dkydgp/Memora/main/pylint_score.json)
+
 ---
 
