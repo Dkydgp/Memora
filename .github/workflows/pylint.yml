@@ -1,13 +1,21 @@
-name: Pylint Quality Check
+name: Pylint Quality Check (call central)
 
+# Run on push and pull requests to main (adjust branch as needed)
 on:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
 
+# Give the workflow permission to push files (needed for commit step)
+permissions:
+  contents: write   # allows commit/push of pylint_score.json
+  checks: write
+  actions: read
+
 jobs:
-  lint:
+  call_universal:
     uses: Dkydgp/.github/.github/workflows/pylint.yml@main
     with:
       min_score: '8.0'
+    # optionally define run-as if needed
