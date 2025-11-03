@@ -111,6 +111,8 @@ Developed by: Dipak Kumar Yadav
 Project Name: Memora – The Chatbot That Remembers You
 Based on: Chainlit + OpenRouter API + Python
 
+### Code quality (Pylint)
+![Pylint Score](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Dkydgp/Memora/main/pylint_score.json)
 
 ---
 
