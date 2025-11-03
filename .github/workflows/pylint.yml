@@ -8,6 +8,6 @@ on:
 
 jobs:
   lint:
-    uses: Memora/.github/.github/workflows/pylint.yml@main
+    uses: Dkydgp/.github/.github/workflows/pylint.yml@main
     with:
       min_score: '8.0'
